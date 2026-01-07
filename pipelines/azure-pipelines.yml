@@ -1,0 +1,271 @@
+# Azure DevOps Pipeline for Multi-Environment Deployment
+# Deploys infrastructure and applications to Dev and Prod environments
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - iac/*
+      - app1/*
+      - app2/*
+      - pipelines/*
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  - name: azureServiceConnection
+    value: 'Azure-Service-Connection'
+  - name:  resourceGroupDev
+    value: 'rg-myapp-dev'
+  - name: resourceGroupProd
+    value: 'rg-myapp-prod'
+  - name:  locationDev
+    value: 'eastus'
+  - name: locationProd
+    value: 'eastus2'
+
+stages:
+  # ============================================
+  # STAGE: Build and Validate
+  # ============================================
+  - stage: Build
+    displayName: 'Build and Validate'
+    jobs:
+      - job: ValidateBicep
+        displayName: 'Validate Bicep Templates'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps: 
+          - task: AzureCLI@2
+            displayName: 'Validate Bicep - Dev'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType:  'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group validate \
+                  --resource-group $(resourceGroupDev) \
+                  --template-file iac/main.bicep \
+                  --parameters iac/parameters/dev.parameters. json
+
+          - task: AzureCLI@2
+            displayName:  'Validate Bicep - Prod'
+            inputs: 
+              azureSubscription: $(azureServiceConnection)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group validate \
+                  --resource-group $(resourceGroupProd) \
+                  --template-file iac/main. bicep \
+                  --parameters iac/parameters/prod.parameters.json
+
+          - task: AzureCLI@2
+            displayName: 'What-If Analysis - Dev'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType:  'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group what-if \
+                  --resource-group $(resourceGroupDev) \
+                  --template-file iac/main.bicep \
+                  --parameters iac/parameters/dev. parameters.json
+
+      - job: BuildApp1
+        displayName: 'Build App1 (Frontend)'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            displayName: 'Install Node.js'
+            inputs:
+              versionSpec: '20.x'
+
+          - script: |
+              cd app1
+              npm ci
+              npm run build
+              npm run test
+            displayName: 'Build and Test App1'
+
+          - task: ArchiveFiles@2
+            displayName: 'Archive App1'
+            inputs:
+              rootFolderOrFile: 'app1'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/app1.zip'
+
+          - publish: $(Build.ArtifactStagingDirectory)/app1.zip
+            artifact: app1
+            displayName: 'Publish App1 Artifact'
+
+      - job:  BuildApp2
+        displayName:  'Build App2 (Backend)'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            displayName: 'Install Node. js'
+            inputs:
+              versionSpec: '20.x'
+
+          - script: |
+              cd app2
+              npm ci
+              npm run build
+              npm run test
+            displayName: 'Build and Test App2'
+
+          - task: ArchiveFiles@2
+            displayName: 'Archive App2'
+            inputs:
+              rootFolderOrFile: 'app2'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/app2.zip'
+
+          - publish: $(Build.ArtifactStagingDirectory)/app2.zip
+            artifact: app2
+            displayName: 'Publish App2 Artifact'
+
+  # ============================================
+  # STAGE: Deploy to Dev (Auto on commit)
+  # ============================================
+  - stage: DeployDev
+    displayName:  'Deploy to Dev'
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/develop'))
+    variables:
+      - name: environment
+        value: 'dev'
+      - name: resourceGroup
+        value: $(resourceGroupDev)
+      - name: location
+        value: $(locationDev)
+    jobs:
+      - deployment: DeployInfrastructureDev
+        displayName: 'Deploy Infrastructure - Dev'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'dev'
+        strategy: 
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - template: templates/deploy-infra.yml
+                  parameters:
+                    azureServiceConnection: $(azureServiceConnection)
+                    resourceGroup: $(resourceGroup)
+                    location: $(location)
+                    environment: $(environment)
+
+      - deployment: DeployAppsDev
+        displayName: 'Deploy Applications - Dev'
+        dependsOn: DeployInfrastructureDev
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment:  'dev'
+        strategy: 
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: app1
+
+                - download: current
+                  artifact: app2
+
+                - template: templates/deploy-apps.yml
+                  parameters:
+                    azureServiceConnection: $(azureServiceConnection)
+                    resourceGroup: $(resourceGroup)
+                    environment: $(environment)
+
+      - job: PostDeployTestDev
+        displayName: 'Post-Deployment Test - Dev'
+        dependsOn: DeployAppsDev
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - template: templates/post-deploy-test.yml
+            parameters:
+              azureServiceConnection: $(azureServiceConnection)
+              resourceGroup:  $(resourceGroup)
+              environment:  $(environment)
+
+  # ============================================
+  # STAGE: Deploy to Prod (Manual approval)
+  # ============================================
+  - stage: DeployProd
+    displayName: 'Deploy to Prod'
+    dependsOn: Build
+    condition:  and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    variables:
+      - name: environment
+        value: 'prod'
+      - name: resourceGroup
+        value: $(resourceGroupProd)
+      - name: location
+        value: $(locationProd)
+    jobs:
+      - deployment: DeployInfrastructureProd
+        displayName: 'Deploy Infrastructure - Prod'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'prod'  # Requires manual approval configured in Azure DevOps
+        strategy:
+          runOnce: 
+            deploy:
+              steps: 
+                - checkout: self
+
+                - template: templates/deploy-infra.yml
+                  parameters:
+                    azureServiceConnection: $(azureServiceConnection)
+                    resourceGroup: $(resourceGroup)
+                    location: $(location)
+                    environment: $(environment)
+
+      - deployment: DeployAppsProd
+        displayName: 'Deploy Applications - Prod'
+        dependsOn: DeployInfrastructureProd
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment:  'prod'
+        strategy: 
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: app1
+
+                - download:  current
+                  artifact: app2
+
+                - template: templates/deploy-apps.yml
+                  parameters:
+                    azureServiceConnection: $(azureServiceConnection)
+                    resourceGroup: $(resourceGroup)
+                    environment: $(environment)
+
+      - job: PostDeployTestProd
+        displayName: 'Post-Deployment Test - Prod'
+        dependsOn: DeployAppsProd
+        pool:
+          vmImage:  'ubuntu-latest'
+        steps:
+          - template: templates/post-deploy-test.yml
+            parameters:
+              azureServiceConnection: $(azureServiceConnection)
+              resourceGroup: $(resourceGroup)
+              environment: $(environment)

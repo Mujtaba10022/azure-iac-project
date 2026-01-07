@@ -1,0 +1,61 @@
+name: Deploy Azure Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'iac/**'
+  pull_request: 
+    branches: [main]
+    paths:
+      - 'iac/**'
+  workflow_dispatch: 
+
+env:
+  AZURE_RESOURCEGROUP_NAME: rg-GM-dev
+  LOCATION: eastus2
+
+jobs:
+  validate:
+    name: Validate Bicep
+    runs-on:  ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name:  Azure Login
+        uses: azure/login@v2
+        with: 
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name:  Validate Bicep template
+        uses: azure/arm-deploy@v2
+        with: 
+          resourceGroupName:  ${{ env. AZURE_RESOURCEGROUP_NAME }}
+          template: ./iac/main. bicep
+          parameters: ./iac/parameters/dev.parameters.json
+          deploymentMode:  Validate
+
+  deploy:
+    name: Deploy Infrastructure
+    needs: validate
+    runs-on: ubuntu-latest
+    if:  github.ref == 'refs/heads/main' && github. event_name == 'push'
+    environment: dev
+    
+    steps: 
+      - name:  Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with: 
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy Bicep template
+        uses: azure/arm-deploy@v2
+        with: 
+          resourceGroupName:  ${{ env. AZURE_RESOURCEGROUP_NAME }}
+          template: ./iac/main.bicep
+          parameters: ./iac/parameters/dev.parameters.json location=${{ env. LOCATION }}
+          deploymentName: gh-actions-${{ github.run_number }}

@@ -1,0 +1,53 @@
+parameters:
+  - name: azureServiceConnection
+    type: string
+  - name: resourceGroup
+    type:  string
+  - name: environment
+    type: string
+
+steps: 
+  - task: AzureCLI@2
+    displayName: 'Get App URLs'
+    inputs:
+      azureSubscription: ${{ parameters. azureServiceConnection }}
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        app1Url=$(az webapp show \
+          --resource-group ${{ parameters.resourceGroup }} \
+          --query "[? contains(name, 'app1')].defaultHostName" -o tsv \
+          --name $(az webapp list --resource-group ${{ parameters.resourceGroup }} --query "[?contains(name, 'app1')].name" -o tsv))
+        
+        echo "##vso[task.setvariable variable=APP1_URL]https://$app1Url"
+
+  - script: |
+      echo "Testing App1 Frontend..."
+      
+      # Test App1 health endpoint
+      response=$(curl -s -o /dev/null -w "%{http_code}" $(APP1_URL)/health)
+      if [ "$response" != "200" ]; then
+        echo "App1 health check failed with status: $response"
+        exit 1
+      fi
+      echo "App1 health check passed"
+      
+      # Test App1 -> App2 connectivity
+      response=$(curl -s $(APP1_URL)/api/backend-health)
+      status=$(echo $response | jq -r '.status')
+      
+      if [ "$status" != "healthy" ]; then
+        echo "App1 -> App2 connectivity test failed"
+        echo "Response: $response"
+        exit 1
+      fi
+      
+      echo "App1 -> App2 connectivity test passed"
+      echo "Backend response: $response"
+    displayName: 'Run Connectivity Tests'
+
+  - script: |
+      echo "Deployment verification completed successfully!"
+      echo "Environment: ${{ parameters.environment }}"
+      echo "App1 URL: $(APP1_URL)"
+    displayName: 'Deployment Summary'
