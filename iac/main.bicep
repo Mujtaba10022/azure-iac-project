@@ -76,3 +76,4 @@ resource sqlFirewallRule 'Microsoft.Sql/servers/firewallRules@2023-05-01-preview
 output vnetId string = vnet.id
 output storageAccountName string = storageAccount.name
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
+// CI/CD enabled
