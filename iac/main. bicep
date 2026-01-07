@@ -95,3 +95,5 @@ output vnetId string = vnet.id
 output storageAccountName string = storageAccount.name
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 // Trigger workflow v2
+
+// Trigger v3
