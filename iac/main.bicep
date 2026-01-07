@@ -77,3 +77,5 @@ output vnetId string = vnet.id
 output storageAccountName string = storageAccount.name
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 // CI/CD enabled
+
+// Trigger workflow v2
