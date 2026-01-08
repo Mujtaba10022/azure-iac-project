@@ -2,9 +2,11 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion":  "1.0.0.0",
   "parameters": {
-    "environment":  { "value": "dev" },
-    "projectName": { "value": "GM" },
-    "sqlAdminLogin": { "value": "sqladmin" },
-    "sqlAdminPassword": { "value": "MyStr0ngP@ssw0rd123!" }
+    "environment": {
+      "value": "dev"
+    },
+    "projectName": {
+      "value":  "gmapp"
+    }
   }
 }
