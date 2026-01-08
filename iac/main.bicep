@@ -82,7 +82,7 @@ resource nsgDb 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
           access: 'Deny'
           protocol: '*'
           sourcePortRange: '*'
-          destinationPortRange:  '*'
+          destinationPortRange: '*'
           sourceAddressPrefix: 'Internet'
           destinationAddressPrefix: '*'
         }
@@ -105,13 +105,13 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
         properties:  {
           addressPrefix: '10.0.1.0/24'
           networkSecurityGroup: {
-            id: nsgWeb. id
+            id: nsgWeb.id
           }
           delegations: [
             {
-              name: 'delegation'
-              properties:  {
-                serviceName: 'Microsoft. Web/serverFarms'
+              name:  'delegation'
+              properties: {
+                serviceName: 'Microsoft.Web/serverFarms'
               }
             }
           ]
@@ -132,32 +132,32 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
 
 // App Service Plan
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
-  name: appServicePlanName
+  name:  appServicePlanName
   location: location
-  sku: {
-    name: 'B1'
+  sku:  {
+    name:  'B1'
     tier: 'Basic'
   }
-  kind: 'linux'
+  kind:  'linux'
   properties: {
     reserved: true
   }
 }
 
 // Web App
-resource webApp 'Microsoft. Web/sites@2023-01-01' = {
+resource webApp 'Microsoft.Web/sites@2023-01-01' = {
   name: webAppName
-  location: location
-  properties: {
+  location:  location
+  properties:  {
     serverFarmId: appServicePlan.id
-    siteConfig: {
-      linuxFxVersion:  'NODE|18-lts'
-      alwaysOn: false
+    siteConfig:  {
+      linuxFxVersion: 'NODE|18-lts'
+      alwaysOn:  false
       ftpsState: 'Disabled'
       minTlsVersion:  '1.2'
     }
     httpsOnly: true
-    virtualNetworkSubnetId:  vnet.properties. subnets[0].id
+    virtualNetworkSubnetId: vnet.properties.subnets[0]. id
   }
 }
 
