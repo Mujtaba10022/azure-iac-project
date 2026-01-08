@@ -98,3 +98,5 @@ output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 
 // Trigger v3
 // Trigger v5
+
+// Trigger v8
