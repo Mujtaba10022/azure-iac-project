@@ -81,3 +81,5 @@ output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 // Trigger workflow v2
 
 // Trigger v6
+
+// Trigger v7
